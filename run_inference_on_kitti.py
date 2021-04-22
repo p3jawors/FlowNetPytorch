@@ -1,5 +1,6 @@
 import argparse
 from path import Path
+import os
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -69,17 +70,31 @@ def main():
         transforms.Normalize(mean=[0.411,0.432,0.45], std=[1,1,1])
     ])
 
+    # print('looking in ', args.data)
+    files = os.listdir(args.data)
+    # print('all: ', files[:5])
+    files[:] = [name for name in files if any(sub in name for sub in args.img_exts)]
+    # print('imgs only: ', files[:5])
+    files = sorted(files)
+    # print('sorted!: ', files[:5])
     img_pairs = []
-    for ext in args.img_exts:
-        # test_files = data_dir.files('*1.{}'.format(ext))
-        test_files = data_dir.files('*0.{}'.format(ext))
-        for file in test_files:
-            # img_pair = file.parent / (file.stem[:-1] + '2.{}'.format(ext))
-            img_pair = file.parent / (file.stem[:-1] + '1.{}'.format(ext))
-            if img_pair.isfile():
-                img_pairs.append([file, img_pair])
+    for ii in range(0, len(files)-1):
+        img1_file = Path('%s/%s' % (args.data, files[ii]))
+        img2_file = Path('%s/%s' % (args.data, files[ii+1]))
+        img_pairs.append([img1_file, img2_file])
 
-    print('{} samples found'.format(len(img_pairs)))
+    # img_pairs = []
+    # for ext in args.img_exts:
+    #     # test_files = data_dir.files('*1.{}'.format(ext))
+    #     test_files = data_dir.files('*0.{}'.format(ext))
+    #     for file in test_files:
+    #         # img_pair = file.parent / (file.stem[:-1] + '2.{}'.format(ext))
+    #         img_pair = file.parent / (file.stem[:-1] + '1.{}'.format(ext))
+    #         if img_pair.isfile():
+    #             img_pairs.append([file, img_pair])
+    #
+    # print('{} samples found'.format(len(img_pairs)))
+
     # create model
     network_data = torch.load(args.pretrained, map_location=torch.device('cuda'))
     print("=> using pre-trained model '{}'".format(network_data['arch']))
@@ -91,6 +106,8 @@ def main():
         args.div_flow = network_data['div_flow']
 
     for (img1_file, img2_file) in tqdm(img_pairs):
+
+        #======================= NOT NEEDED AFTER ALL
         # reshape our images because of how network divides and scales data
         # https://github.com/ClementPinard/FlowNetPytorch/issues/11
         # print('OG SHAPE: ', imread(img1_file).shape)
@@ -110,6 +127,7 @@ def main():
         # # pass in to input_transform because it was in the original repo
         # img1 = input_transform(img1)
         # img2 = input_transform(img2)
+        #=========================
 
         img1 = input_transform(imread(img1_file))
         img2 = input_transform(imread(img2_file))
@@ -135,7 +153,7 @@ def main():
                 # Make the flow map a HxWx2 array as in .flo files
                 to_save = (args.div_flow*flow_output).cpu().numpy().transpose(1,2,0)
                 np.save(filename + '.npy', to_save)
-                print('\n\n\nFlow is: ', to_save.shape)
+                # print('\n\n\nFlow is: ', to_save.shape)
 
 
 if __name__ == '__main__':
