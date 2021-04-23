@@ -82,6 +82,7 @@ def main():
         img1_file = Path('%s/%s' % (args.data, files[ii]))
         img2_file = Path('%s/%s' % (args.data, files[ii+1]))
         img_pairs.append([img1_file, img2_file])
+    # print('Have dis many img pairs: ', len(img_pairs))
 
     # img_pairs = []
     # for ext in args.img_exts:
@@ -105,7 +106,12 @@ def main():
     if 'div_flow' in network_data.keys():
         args.div_flow = network_data['div_flow']
 
+    nn = 0
     for (img1_file, img2_file) in tqdm(img_pairs):
+        # print('img1: ', img1_file)
+        # print('img2: ', img2_file)
+        # print('img %i/%i' % (nn, len(img_pairs)))
+        nn += 1
 
         #======================= NOT NEEDED AFTER ALL
         # reshape our images because of how network divides and scales data
@@ -144,12 +150,14 @@ def main():
         if args.upsampling is not None:
             output = F.interpolate(output, size=img1.size()[-2:], mode=args.upsampling, align_corners=False)
         for suffix, flow_output in zip(['flow', 'inv_flow'], output):
-            filename = save_path/'{}{}'.format(img1_file.stem[:-1], suffix)
+            # NOTE made this img2 as the position is relative to that img
+            filename = save_path/'{}{}'.format(img2_file.stem, suffix)
             if args.output_value in['vis', 'both']:
                 rgb_flow = flow2rgb(args.div_flow * flow_output, max_value=args.max_flow)
                 to_save = (rgb_flow * 255).astype(np.uint8).transpose(1,2,0)
                 imwrite(filename + '.png', to_save)
             if args.output_value in ['raw', 'both']:
+                # print('saving npy file to: ', filename)
                 # Make the flow map a HxWx2 array as in .flo files
                 to_save = (args.div_flow*flow_output).cpu().numpy().transpose(1,2,0)
                 np.save(filename + '.npy', to_save)
