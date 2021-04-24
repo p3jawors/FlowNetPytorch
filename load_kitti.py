@@ -2,7 +2,7 @@ import numpy as np
 from tqdm import tqdm
 import os
 
-def load(kitti_seq=0):
+def load(kitti_seq=0, vel_gt=True):
     assert kitti_seq in range(0, 11)
     print('Loading optical flow and ground truth from KITTI%02d' % kitti_seq)
     print('Note: skipping gt at time 0 since we have no features yet')
@@ -32,13 +32,16 @@ def load(kitti_seq=0):
     flow_array = np.asarray(flow_array)
 
     pose_folder = '%s/../poses' % seq_folder
-    vel_gt = np.load('%s/%02d_vel.npz' % (pose_folder, kitti_seq))['vel'][1:]
+    if vel_gt:
+        gt = np.load('%s/%02d_vel.npz' % (pose_folder, kitti_seq))['vel'][1:]
+    else:
+        gt = np.load('%s/%02d.npz' % (pose_folder, kitti_seq))['vel'][1:]
 
     # print('gt: ', vel_gt.shape)
     # print('flow: ', flow_array.shape)
-    assert (vel_gt.shape[0] == flow_array.shape[0])
+    assert (gt.shape[0] == flow_array.shape[0])
 
-    return flow_array, vel_gt
+    return flow_array, gt
 
 if __name__ == '__main__':
     load(0)
