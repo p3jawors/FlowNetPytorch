@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 # from IPython.display import Image, display
 import tensorflow as tf
 import timeit
+import os
 
 import keras_lmu
 import load_kitti
@@ -67,6 +68,7 @@ def run(
     #TODO currently looking one scene at a time, will need a constant normalization
     # max flow for all KITTI scenes is 185.17... add some buffer and use 190
     max_flow = 190
+    # max_flow = 1
     n_steps = op_flow.shape[0]
 
     if do_training:
@@ -123,8 +125,8 @@ def run(
             kernel_initializer="ones",
         )
     )
-    # max_pool_layer = tf.keras.layers.MaxPooling3D(
-    #         pool_size=(1, 2, 2), strides=None, padding='valid')
+    max_pool_layer = tf.keras.layers.MaxPooling2D(
+            pool_size=(2, 2), strides=None, padding='valid')
 
     conv_layer = tf.keras.layers.Conv2D(
         filters=2, kernel_size=kernel, strides=kernel, padding='valid'
@@ -136,10 +138,12 @@ def run(
 
     # TensorFlow layer definition
     inputs = tf.keras.Input(flow_shape)
-    conv = conv_layer(inputs)
+    # conv = conv_layer(inputs)
+    max_pool = max_pool_layer(inputs)
     # reshape = reshape_layer(inputs)
     # conv = conv_layer(reshape)
-    flatten = flatten_layer(conv)
+    # flatten = flatten_layer(conv)
+    flatten = flatten_layer(max_pool)
     lmus = lmu_layer(flatten)
     outputs = tf.keras.layers.Dense(3)(lmus)
 
@@ -179,7 +183,10 @@ def run(
         print('\n\nTraining ran for %.2f min\n\n' % (runtime/60))
 
     if do_training:
-        plt.figure()
+        # with open('trainHistory/%s'%(saved_weights_fname.split('/')[1]), 'wb') as file_pi:
+        #     pickle.dump(result.history, file_pi)
+
+        plt.figure(figsize=(8,12))
         plt.plot(result.history["val_accuracy"], label="Validation")
         plt.plot(result.history["accuracy"], label="Training")
         plt.legend()
@@ -187,7 +194,7 @@ def run(
         plt.ylabel("Accuracy")
         plt.title("Post-epoch Training Accuracies")
         plt.xticks(np.arange(epochs), np.arange(1, epochs + 1))
-        plt.ylim((0.85, 1.0))  # Restrict range of y axis to (0.85, 1) for readability
+        plt.ylim((0.0, 1.0))  # Restrict range of y axis to (0.85, 1) for readability
         plt.savefig("KITTI%02d-training.png" % KITTI_SEQ)
 
         val_loss_min = np.argmin(result.history["val_loss"])
@@ -195,7 +202,7 @@ def run(
             f"Maximum validation accuracy: "
             f"{round(result.history['val_accuracy'][val_loss_min] * 100, 2):.2f}%"
         )
-        return None, val_loss_min
+        return result, val_loss_min
 
     else:
         # display(Image(filename="KITTI%02d-training.png" % KITTI_SEQ))
@@ -225,7 +232,8 @@ def run(
             plt.subplot(212)
             plt.title('Error')
             plt.plot(np.linalg.norm((out-gt), axis=1))
-            plt.show()
+            # plt.show()
+            plt.savefig('%s-PREDICTION.png' % saved_weights_fname)
         return out, accuracy
 
 try:
@@ -233,14 +241,14 @@ try:
     dat = DataHandler('syde673-lmu_vo')
 except:
     print('%sInstall abr_analyze to save results to hdf4 database%s' % (red, endc))
-testnum = 2
+testnum = 13
 batch_size = 32
-epochs = 1000
-memory_d = 10
-order = 256
-theta_scale=4 # how many timesteps to keep in dynamical model
+epochs = 5
+memory_d = 100
+order = 128
+theta_scale = 2 # how many timesteps to keep in dynamical model
 show_plot = True
-save = False
+save = True
 
 if not save:
     print('%sWARNING NOT SAVING%s' % (red, endc))
@@ -254,14 +262,24 @@ KITTI_SHAPE = (93, 307, 2)
 feature_shape_post_conv = (46, 153, 2)
 # set our theta to a multiple of the downsampled input to choose how many windows to keep in the dynamic model
 
-theta=np.prod(KITTI_SHAPE)*theta_scale, #  this keeps one seq in theta
+# theta=np.prod(KITTI_SHAPE)*theta_scale, #  this keeps one seq in theta
+theta=np.prod(feature_shape_post_conv)*theta_scale, #  this keeps one seq in theta
 notes = (
 '''
-all previous tests had theta_scale of 4\n
-testing with theta_scale of 10, epochs 1000, memory 100, order 256
+- Fixed theta issue, was using KITTI_SHAPE which is input image shape for theta, but should use the shape
+of the conv/max pool layer output. So all prev tests had theta *= 4
+- Max pool instead of conv
+Testing with op flow normalization\n
+- epochs 1000
+- theta scale 2\n
+- memory dim 100
+- order 128
 '''
 )
 # NOTE that changes to trainval or test seq need to be made in run() as well
+# TRAIN_SEQ = [0, 2, 8]
+# VAL_SEQ = [1, 9]
+# TRAINVAL_SEQ = TRAIN_SEQ + VAL_SEQ
 TRAINVAL_SEQ = [0, 1, 2, 8, 9]
 # TRAINVAL_SEQ = [8, 9]
 TEST_SEQ = [3, 4, 5, 6, 7, 10]
@@ -282,26 +300,43 @@ if dat:
     }
     dat.save(data=test_params, save_location='%s/%s' % (test_group, testnum), overwrite=True)
 
-# seqs = TRAINVAL_SEQ + TEST_SEQ
-seqs = []
+seqs = TRAINVAL_SEQ + TEST_SEQ
+# seqs = []
 # setup to run test inference after every trainval cycle
-for seq in TRAINVAL_SEQ:
-    seqs.append(seq)
-    for x in TEST_SEQ:
-        seqs.append(x)
+# for seq in TRAINVAL_SEQ:
+#     seqs.append(seq)
+#     for x in TEST_SEQ:
+#         seqs.append(x)
 
 
 # saved_weights_fname = "./KITTI%02d-weights.hdf5" % KITTI_SEQ
-saved_weights_fname = "./test_%04d-epochs_%i-batch_%i-mem_%i-ord_%i-KITTI-weights.hdf5" % (
-        testnum, epochs, batch_size, memory_d, order)
-# saved_weights_fname = "./test_%04d-epochs_%i-batch_%i-mem_%i-ord_%i-theta_%i-KITTI-weights.hdf5" % (
-#         testnum, epochs, batch_size, memory_d, order, theta_scale)
+# saved_weights_fname = "./test_%04d-epochs_%i-batch_%i-mem_%i-ord_%i-KITTI-weights.hdf5" % (
+#         testnum, epochs, batch_size, memory_d, order)
+save_folder = 'checkpoints'
+save_name = "test_%04d-epochs_%i-batch_%i-mem_%i-ord_%i-theta_%i-KITTI-weights" % (
+        testnum, epochs, batch_size, memory_d, order, theta_scale)
+# save_name_epochs = "%s-{epoch:02d}.hdf5" % save_name
+save_name_epochs = "%s.hdf5" % save_name
+saved_weights_fname = '%s/%s' % (save_folder, save_name_epochs)
 results = []
-seqs=[4]
-for seq in seqs:
+# seqs=[4]
+trained_seq = []
+for ss, seq in enumerate(seqs):
+    # files = os.listdir(save_folder)
+    # # print('all: ', files[:5])
+    # files[:] = [name for name in files if (
+    #                 any(sub in name for sub in [save_name])
+    #                 and '.png' not in name)]
+    # if len(files) > 0:
+    #     saved_weights_fname = '%s/%s' % (save_folder, sorted(files)[-1])
+    #     print('%sUsing latest best weights: %s%s' % (green, saved_weights_fname, endc))
+    # else:
+    #     print('%sFresh start learning%s' % (green, endc))
+
     print('%sTEST PARAMS\n%s%s' % (blue, test_params, endc))
     plot = False
     if seq in TRAINVAL_SEQ:
+        trained_seq.append(seq)
         do_training = True
         test_type='trainval'
         print('%sRUNNING TRAINING%s' % (red, endc))
@@ -335,17 +370,31 @@ for seq in seqs:
             save_location='%s/%s/KITTI%02d' % (test_group, testnum, seq),
                 overwrite=True
         )
-        if results is not None:
+        # if results is not None:
+        trained_seq_str = ''
+        for num in trained_seq:
+            trained_seq_str += '-%i' % num
+        if test_type == 'test':
             dat.save(
                 data={'predict': output},
-                save_location='%s/%s/KITTI%02d' % (test_group, testnum, seq),
+                save_location='%s/%s/KITTI%s' % (test_group, testnum, trained_seq_str),
                     overwrite=True
             )
+        elif test_type == 'trainval':
+            print('TYPE: ', type(output.history))
+            import time
+            time.sleep(3)
+            dat.save(
+                data={'result': output.history},
+                save_location='%s/%s/KITTI%s' % (test_group, testnum, trained_seq_str),
+                    overwrite=True
+            )
+
 
 if save:
     dat.save(
         data={'results': results, 'results_seq': seqs},
-        save_location='%s/%s/KITTI%02d' % (test_group, testnum),
+        save_location='%s/%s/KITTI%02d' % (test_group, testnum, seq),
         overwrite=True
         )
 
