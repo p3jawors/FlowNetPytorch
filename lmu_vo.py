@@ -58,10 +58,12 @@ print(f"Testing inputs shape: {test_flow.shape}, Testing targets shape: {test_gt
 
 #NOTE defining the model
 print('train flow shape: ', train_flow.shape)
-shape = train_flow.shape
-n_pixels = np.prod(train_flow.shape[1:])
-kernel = (1, 2, 2)
-# kernel = (2, 2)
+# shape = train_flow.shape
+# n_pixels = np.prod(train_flow.shape[1:])
+shape = train_flow.shape[1:]
+n_pixels = np.prod(shape)
+# kernel = (1, 2, 2)
+kernel = (2, 2)
 
 lmu_layer = tf.keras.layers.RNN(
     keras_lmu.LMUCell(
@@ -78,13 +80,14 @@ lmu_layer = tf.keras.layers.RNN(
 # max_pool_layer = tf.keras.layers.MaxPooling3D(
 #         pool_size=(1, 2, 2), strides=None, padding='valid')
 
-# conv3_layer = tf.keras.layers.Conv2D(
-conv3_layer = tf.keras.layers.Conv3D(
+conv3_layer = tf.keras.layers.Conv2D(
+# conv3_layer = tf.keras.layers.Conv3D(
     filters=2, kernel_size=kernel, strides=kernel, padding='valid'
 )
 
 # flatten_layer = tf.keras.layers.Flatten(data_format='channels_last')
-flatten_layer = tf.keras.layers.Reshape((shape[0], n_pixels))
+# flatten_layer = tf.keras.layers.Reshape((shape[0], n_pixels))
+flatten_layer = tf.keras.layers.Reshape((1, 46*153*2))
 
 # TensorFlow layer definition
 inputs = tf.keras.Input(shape)
