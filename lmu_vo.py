@@ -18,7 +18,15 @@ rng = np.random.RandomState(seed)
 # load kitti dataset and a modified gt that gets vel from the pos given by kitti
 # input shape of (n_frames/(n_frames_per_theta_window), feature_size*n_frames_per_theta_window, 1)
 # NOTE currently not set, so n_frames_per_theta_window=1
-op_flow, gt = load_kitti.load(KITTI_SEQ)
+try:
+    op_flow, gt = load_kitti.load(KITTI_SEQ)
+    # np.savez('kitti04', op_flow=op_flow, gt=gt)
+except:
+    print('Thanks for taking a look at this, make sure you put the npz file in the same directory ;)')
+    data = np.load('kitti04.npz')
+    op_flow = data['op_flow']
+    gt = data['gt']
+
 n_steps = op_flow.shape[0]
 
 # split up 60% train 20% test 20% valid
@@ -30,10 +38,6 @@ train_gt = gt[:int(n_steps*0.6)]
 test_gt = gt[int(n_steps*0.6):int(n_steps*0.8)]
 valid_gt = gt[int(n_steps*0.8):]
 
-# (train_images, train_labels), (
-#     test_images,
-#     test_labels,
-# ) = tf.keras.datasets.mnist.load_data()
 
 #TODO currently looking one scene at a time, will need a constant normalization
 # scene 1 max vo is ~170
@@ -41,42 +45,6 @@ max_flow = 170
 train_flow = train_flow / max_flow
 test_flow = test_flow / max_flow
 valid_flow = valid_flow / max_flow
-# train_images = train_images / 255
-# test_images = test_images / 255
-
-# plt.figure()
-# plt.imshow(np.reshape(train_images[0], (28, 28)), cmap="gray")
-# plt.axis("off")
-# plt.title(f"Sample image of the digit '{train_labels[0]}'")
-# plt.show()
-#
-# train_images = train_images.reshape((train_images.shape[0], -1, 1))
-# test_images = test_images.reshape((test_images.shape[0], -1, 1))
-#
-# # we'll display the sequence in 8 rows just so that it fits better on the screen
-# plt.figure()
-# plt.imshow(train_images[0].reshape(8, -1), cmap="gray")
-# plt.axis("off")
-# plt.title(f"Sample sequence of the digit '{train_labels[0]}' (reshaped to 98 x 8)")
-# plt.show()
-#
-# perm = rng.permutation(train_images.shape[1])
-# train_images = train_images[:, perm]
-# test_images = test_images[:, perm]
-#
-# plt.figure()
-# plt.imshow(train_images[0].reshape(8, -1), cmap="gray")
-# plt.axis("off")
-# plt.title(f"Permuted sequence of the digit '{train_labels[0]}' (reshaped to 98 x 8)")
-# plt.show()
-#
-# X_train = train_images[0:50000]
-# X_valid = train_images[50000:]
-# X_test = test_images
-#
-# Y_train = train_labels[0:50000]
-# Y_valid = train_labels[50000:]
-# Y_test = test_labels
 
 print(
     f"Training inputs shape: {train_flow.shape}, "
@@ -91,11 +59,7 @@ print(f"Testing inputs shape: {test_flow.shape}, Testing targets shape: {test_gt
 #NOTE defining the model
 print('train flow shape: ', train_flow.shape)
 shape = train_flow.shape
-# n_pixels = train_flow.shape[1]
 n_pixels = np.prod(train_flow.shape[1:])
-# print(train_flow.ndim)
-# pool_size = (2, 2, 1)
-# pool_size = (2, 2)
 kernel = (1, 2, 2)
 # kernel = (2, 2)
 
