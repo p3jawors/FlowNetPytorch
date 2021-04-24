@@ -17,18 +17,18 @@ def load(kitti_seq=0):
     files = sorted(files)
     # print('sorted!: ', files[:5])
     flow_array = []
-    mxs = []
+    # mxs = []
     for ii in tqdm(range(0, len(files))):
         flow = np.load('%s/%s' % (vo_dir, files[ii]))
-        # print('flow: ', flow.shape)
-        shape = flow.shape
-        flow = flow.reshape(shape[0], shape[1] * shape[2])
-        # print('flow: ', flow.shape)
-        shape = flow.shape
-        flow = flow.reshape(shape[0] * shape[1])
+        # # print('flow: ', flow.shape)
+        # shape = flow.shape
+        # flow = flow.reshape(shape[0], shape[1] * shape[2])
+        # # print('flow: ', flow.shape)
+        # shape = flow.shape
+        # flow = flow.reshape(shape[0] * shape[1])
         # print('flow: ', flow.shape)
         flow_array.append(flow)
-        mxs.append(max(flow))
+        # mxs.append(max(flow))
     flow_array = np.asarray(flow_array)
 
     pose_folder = '%s/../poses' % seq_folder

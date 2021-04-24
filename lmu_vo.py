@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import Image, display
 import tensorflow as tf
+import timeit
 
 import keras_lmu
 import load_kitti
@@ -88,13 +89,21 @@ print(
 print(f"Testing inputs shape: {test_flow.shape}, Testing targets shape: {test_gt.shape}")
 
 #NOTE defining the model
-n_pixels = train_flow.shape[1]
+print('train flow shape: ', train_flow.shape)
+shape = train_flow.shape
+# n_pixels = train_flow.shape[1]
+n_pixels = np.prod(train_flow.shape[1:])
+# print(train_flow.ndim)
+# pool_size = (2, 2, 1)
+# pool_size = (2, 2)
+kernel = (1, 2, 2)
+# kernel = (2, 2)
 
 lmu_layer = tf.keras.layers.RNN(
     keras_lmu.LMUCell(
         memory_d=1,
         order=256,
-        theta=n_pixels,
+        theta=n_pixels/np.prod(kernel), #  this keeps one seq in theta
         hidden_cell=tf.keras.layers.SimpleRNNCell(212),
         hidden_to_memory=False,
         memory_to_memory=False,
@@ -102,14 +111,28 @@ lmu_layer = tf.keras.layers.RNN(
         kernel_initializer="ones",
     )
 )
+# max_pool_layer = tf.keras.layers.MaxPooling3D(
+#         pool_size=(1, 2, 2), strides=None, padding='valid')
+
+# conv3_layer = tf.keras.layers.Conv2D(
+conv3_layer = tf.keras.layers.Conv3D(
+    filters=2, kernel_size=kernel, strides=kernel, padding='valid'
+)
+
+# flatten_layer = tf.keras.layers.Flatten(data_format='channels_last')
+flatten_layer = tf.keras.layers.Reshape((shape[0], n_pixels))
 
 # TensorFlow layer definition
-inputs = tf.keras.Input((n_pixels, 1))
-lmus = lmu_layer(inputs)
-outputs = tf.keras.layers.Dense(1)(lmus)
+inputs = tf.keras.Input(shape)
+conv3 = conv3_layer(inputs)
+flatten = flatten_layer(conv3)
+lmus = lmu_layer(flatten)
+outputs = tf.keras.layers.Dense(3)(lmus)
 
 # TensorFlow model definition
 model = tf.keras.Model(inputs=inputs, outputs=outputs)
+for layer in model.layers:
+    print(layer.output_shape)
 print('compiling model')
 model.compile(
     # loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -131,6 +154,7 @@ callbacks = [
     ),
 ]
 
+start_time = timeit.default_timer()
 if do_training:
     print('Starting training...')
     result = model.fit(
@@ -141,6 +165,9 @@ if do_training:
         validation_data=(valid_flow, valid_gt),
         callbacks=callbacks,
     )
+
+runtime = timeit.default_timer() - start_time
+print('\n\nTraining ran for %.2f min\n\n' % (runtime/60))
 
 if do_training:
     plt.figure()
