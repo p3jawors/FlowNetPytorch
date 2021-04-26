@@ -139,6 +139,9 @@ def run(
         filters=2, kernel_size=kernel, strides=kernel, padding='valid'
     )
 
+    conv_layer2 = tf.keras.layers.Conv2D(
+        filters=2, kernel_size=kernel, strides=kernel, padding='valid'
+    )
     # TODO shape is currently hardcoded because I don't know how to get conv output shape
     # flatten_layer = tf.keras.layers.Reshape((1, 46*153*2))
     flatten_layer = tf.keras.layers.Reshape((1, np.prod(feature_shape_post_conv)))
@@ -149,8 +152,9 @@ def run(
 
     # max_pool = max_pool_layer(reshape)
     # flatten = flatten_layer(max_pool)
-    conv = conv_layer(reshape)
-    flatten = flatten_layer(conv)
+    conv1 = conv_layer(reshape)
+    conv2 = conv_layer2(conv1)
+    flatten = flatten_layer(conv2)
 
     lmus = lmu_layer(flatten)
 
@@ -161,7 +165,10 @@ def run(
     # TensorFlow model definition
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     for layer in model.layers:
-        print(layer.output_shape)
+        try:
+            print(layer.output_shape)
+        except AttributeError as e:
+            print(e)
     print('compiling model')
     model.compile(
         # loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -255,7 +262,7 @@ try:
     dat = DataHandler('syde673-lmu_vo')
 except:
     print('%sInstall abr_analyze to save results to hdf4 database%s' % (red, endc))
-testnum = 23
+testnum = 24
 batch_size = 32
 epochs = 1000
 memory_d = 500
@@ -273,7 +280,8 @@ if not save:
 # we reshape our inputs to this size
 KITTI_SHAPE = (93, 307, 2)
 # this is the shape of the input after the conv downsampling
-feature_shape_post_conv = (46, 153, 2)
+# feature_shape_post_conv = (46, 153, 2) #NOTE for 1 conv layer
+feature_shape_post_conv = (23, 76, 2) #NOTE for 2 conv layers
 # set our theta to a multiple of the downsampled input to choose how many windows to keep in the dynamic model
 
 # theta=np.prod(KITTI_SHAPE)*theta_scale, #  this keeps one seq in theta
