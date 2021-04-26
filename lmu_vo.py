@@ -139,9 +139,9 @@ def run(
         filters=2, kernel_size=kernel, strides=kernel, padding='valid'
     )
 
-    conv_layer2 = tf.keras.layers.Conv2D(
-        filters=2, kernel_size=kernel, strides=kernel, padding='valid'
-    )
+    # conv_layer2 = tf.keras.layers.Conv2D(
+    #     filters=2, kernel_size=kernel, strides=kernel, padding='valid'
+    # )
     # TODO shape is currently hardcoded because I don't know how to get conv output shape
     # flatten_layer = tf.keras.layers.Reshape((1, 46*153*2))
     flatten_layer = tf.keras.layers.Reshape((1, np.prod(feature_shape_post_conv)))
@@ -152,9 +152,12 @@ def run(
 
     # max_pool = max_pool_layer(reshape)
     # flatten = flatten_layer(max_pool)
-    conv1 = conv_layer(reshape)
-    conv2 = conv_layer2(conv1)
-    flatten = flatten_layer(conv2)
+    conv = conv_layer(reshape)
+    flatten = flatten_layer(conv)
+
+    # conv1 = conv_layer(reshape)
+    # conv2 = conv_layer2(conv1)
+    # flatten = flatten_layer(conv2)
 
     lmus = lmu_layer(flatten)
 
@@ -236,23 +239,39 @@ def run(
         print('out shape: ', out.shape)
         print('gt shape: ', gt.shape)
         if plot:
-            plt.figure()
-            plt.subplot(211)
+            plt.figure(figsize=(8,12))
+
+            plt.subplot(311)
             plt.title('Velocity')
             xs = np.arange(0, len(test_gt))
             # plt.scatter(xs, test_gt[:, 0], label='gt x', c='r')
             # plt.scatter(xs, test_gt[:, 1], label='gt y', c='g')
             # plt.scatter(xs, test_gt[:, 2], label='gt z', c='b')
-            plt.plot(test_gt[:, 0], label='gt x', c='m')
-            plt.plot(test_gt[:, 1], label='gt y', c='y')
-            plt.plot(test_gt[:, 2], label='gt z', c='c')
-            plt.plot(out[:, 0], label='pred x', c='r', linestyle='--')
-            plt.plot(out[:, 1], label='pred y', c='g', linestyle='--')
-            plt.plot(out[:, 2], label='pred z', c='b', linestyle='--')
+            plt.plot(test_gt[:, 0], label='gt dx', c='m')
+            plt.plot(test_gt[:, 1], label='gt dy', c='y')
+            plt.plot(test_gt[:, 2], label='gt dz', c='c')
+            plt.plot(out[:, 0], label='pred dx', c='r', linestyle='--')
+            plt.plot(out[:, 1], label='pred dy', c='g', linestyle='--')
+            plt.plot(out[:, 2], label='pred dz', c='b', linestyle='--')
             plt.legend()
-            plt.subplot(212)
+
+            plt.subplot(312)
+            plt.title('Position')
+            xs = np.arange(0, len(test_gt))
+            dt = 0.1
+            plt.plot(np.cumsum(test_gt[:, 0])*dt, label='gt x', c='m')
+            plt.plot(np.cumsum(test_gt[:, 1])*dt, label='gt y', c='y')
+            plt.plot(np.cumsum(test_gt[:, 2])*dt, label='gt z', c='c')
+            plt.plot(np.cumsum(out[:, 0])*dt, label='pred x', c='r', linestyle='--')
+            plt.plot(np.cumsum(out[:, 1])*dt, label='pred y', c='g', linestyle='--')
+            plt.plot(np.cumsum(out[:, 2])*dt, label='pred z', c='b', linestyle='--')
+            plt.legend()
+
+            plt.subplot(313)
             plt.title('Error')
-            plt.plot(np.linalg.norm((out-gt), axis=1))
+            plt.plot(np.linalg.norm((out-gt), axis=1), label='vel_error')
+            plt.plot(np.linalg.norm((np.cumsum(out, axis=1)-np.cumsum(gt, axis=1)), axis=1), label='pos_error')
+            plt.legend()
             # plt.show()
             plt.savefig('%s-KITTI%02d-PREDICTION.png' % (saved_weights_fname, KITTI_SEQ))
         return out, accuracy
@@ -262,14 +281,14 @@ try:
     dat = DataHandler('syde673-lmu_vo')
 except:
     print('%sInstall abr_analyze to save results to hdf4 database%s' % (red, endc))
-testnum = 24
+testnum = 23
 batch_size = 32
 epochs = 1000
 memory_d = 500
 order = 256
 theta_scale = 2 # how many timesteps to keep in dynamical model
 show_plot = True
-save = True
+save = False
 
 if not save:
     print('%sWARNING NOT SAVING%s' % (red, endc))
@@ -280,8 +299,8 @@ if not save:
 # we reshape our inputs to this size
 KITTI_SHAPE = (93, 307, 2)
 # this is the shape of the input after the conv downsampling
-# feature_shape_post_conv = (46, 153, 2) #NOTE for 1 conv layer
-feature_shape_post_conv = (23, 76, 2) #NOTE for 2 conv layers
+feature_shape_post_conv = (46, 153, 2) #NOTE for 1 conv layer
+# feature_shape_post_conv = (23, 76, 2) #NOTE for 2 conv layers
 # set our theta to a multiple of the downsampled input to choose how many windows to keep in the dynamic model
 
 # theta=np.prod(KITTI_SHAPE)*theta_scale, #  this keeps one seq in theta
@@ -324,7 +343,8 @@ if dat:
     }
     dat.save(data=test_params, save_location='%s/%s' % (test_group, testnum), overwrite=True)
 
-seqs = TRAINVAL_SEQ + TEST_SEQ
+# seqs = TRAINVAL_SEQ + TEST_SEQ
+seqs = TEST_SEQ
 # seqs = []
 # setup to run test inference after every trainval cycle
 # for seq in TRAINVAL_SEQ:
