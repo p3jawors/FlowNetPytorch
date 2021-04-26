@@ -1,5 +1,6 @@
 import numpy as np
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 import os
 
 def load(kitti_seq=0, vel_gt=True):
@@ -17,7 +18,8 @@ def load(kitti_seq=0, vel_gt=True):
     files = sorted(files)
     # print('sorted!: ', files[:5])
     flow_array = []
-    # mxs = []
+    mxs = []
+    mns = []
     for ii in tqdm(range(0, len(files))):
         flow = np.load('%s/%s' % (vo_dir, files[ii]))
         # # print('flow: ', flow.shape)
@@ -28,15 +30,17 @@ def load(kitti_seq=0, vel_gt=True):
         # flow = flow.reshape(shape[0] * shape[1])
         # print('flow: ', flow.shape)
         flow_array.append(flow)
-        # mxs.append(max(flow))
+        mxs.append(np.amax(flow))
+        mns.append(np.amin(flow))
     flow_array = np.asarray(flow_array)
+    print('MAXES: ', max(mxs))
+    print('MINS: ', min(mns))
 
     pose_folder = '%s/../poses' % seq_folder
     if vel_gt:
         gt = np.load('%s/%02d_vel.npz' % (pose_folder, kitti_seq))['vel'][1:]
     else:
-        gt = np.load('%s/%02d.npz' % (pose_folder, kitti_seq))['vel'][1:]
-
+        gt = np.load('%s/%02d.npz' % (pose_folder, kitti_seq))['pos'][1:]
     # print('gt: ', vel_gt.shape)
     # print('flow: ', flow_array.shape)
     assert (gt.shape[0] == flow_array.shape[0])
@@ -44,4 +48,19 @@ def load(kitti_seq=0, vel_gt=True):
     return flow_array, gt
 
 if __name__ == '__main__':
-    load(0)
+    for ii in range(0, 11):
+        flow, gt = load(ii, False)
+        plt.figure()
+        plt.subplot(211)
+        plt.title('Pos GT')
+        plt.legend(['x', 'y', 'z'])
+        plt.plot(gt)
+
+        flow, gt = load(ii, True)
+        plt.subplot(212)
+        plt.title('Vel GT')
+        plt.plot(gt)
+        plt.legend(['dx', 'dy', 'dz'])
+        # plt.show()
+        plt.savefig('KITTI%02d-GT.png' % ii)
+

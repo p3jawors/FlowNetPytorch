@@ -68,6 +68,7 @@ def run(
     #TODO currently looking one scene at a time, will need a constant normalization
     # max flow for all KITTI scenes is 185.17... add some buffer and use 190
     max_flow = 190
+    max_vel = 20
     # max_flow = 1
     n_steps = op_flow.shape[0]
 
@@ -111,6 +112,8 @@ def run(
 
     reshape_layer = tf.keras.layers.Reshape(KITTI_SHAPE)
 
+    # lmu_scaleup_layer = tf.keras.layers.experimental.preprocessing.Rescaling(max_vel)
+
     lmu_layer = tf.keras.layers.RNN(
         keras_lmu.LMUCell(
             memory_d=memory_d,
@@ -118,9 +121,13 @@ def run(
             # theta=n_pixels/np.prod(kernel), #  this keeps one seq in theta
             # theta=np.prod(KITTI_SHAPE), #  this keeps one seq in theta
             theta=theta,
-            hidden_cell=tf.keras.layers.SimpleRNNCell(212),
-            hidden_to_memory=False,
-            memory_to_memory=False,
+            # hidden_cell=tf.keras.layers.SimpleRNNCell(212),
+            # hidden_cell=tf.keras.layers.ReLU(22),
+            hidden_cell=tf.keras.layers.Dense(212, activation=tf.keras.activations.relu),
+            # hidden_to_memory=False,
+            # memory_to_memory=False,
+            hidden_to_memory=True,
+            memory_to_memory=True,
             input_to_hidden=True,
             kernel_initializer="ones",
         )
@@ -138,14 +145,18 @@ def run(
 
     # TensorFlow layer definition
     inputs = tf.keras.Input(flow_shape)
-    # conv = conv_layer(inputs)
-    max_pool = max_pool_layer(inputs)
-    # reshape = reshape_layer(inputs)
-    # conv = conv_layer(reshape)
-    # flatten = flatten_layer(conv)
-    flatten = flatten_layer(max_pool)
+    reshape = reshape_layer(inputs)
+
+    # max_pool = max_pool_layer(reshape)
+    # flatten = flatten_layer(max_pool)
+    conv = conv_layer(reshape)
+    flatten = flatten_layer(conv)
+
     lmus = lmu_layer(flatten)
+
     outputs = tf.keras.layers.Dense(3)(lmus)
+    # scale_up = lmu_scaleup_layer(lmus)
+    # outputs = tf.keras.layers.Dense(3)(scale_up)
 
     # TensorFlow model definition
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
@@ -222,18 +233,21 @@ def run(
             plt.subplot(211)
             plt.title('Velocity')
             xs = np.arange(0, len(test_gt))
-            plt.scatter(xs, test_gt[:, 0], label='gt x', c='r')
-            plt.scatter(xs, test_gt[:, 1], label='gt y', c='g')
-            plt.scatter(xs, test_gt[:, 2], label='gt z', c='b')
-            plt.plot(out[:, 0], label='pred x', c='r')
-            plt.plot(out[:, 1], label='pred y', c='g')
-            plt.plot(out[:, 2], label='pred z', c='b')
+            # plt.scatter(xs, test_gt[:, 0], label='gt x', c='r')
+            # plt.scatter(xs, test_gt[:, 1], label='gt y', c='g')
+            # plt.scatter(xs, test_gt[:, 2], label='gt z', c='b')
+            plt.plot(test_gt[:, 0], label='gt x', c='m')
+            plt.plot(test_gt[:, 1], label='gt y', c='y')
+            plt.plot(test_gt[:, 2], label='gt z', c='c')
+            plt.plot(out[:, 0], label='pred x', c='r', linestyle='--')
+            plt.plot(out[:, 1], label='pred y', c='g', linestyle='--')
+            plt.plot(out[:, 2], label='pred z', c='b', linestyle='--')
             plt.legend()
             plt.subplot(212)
             plt.title('Error')
             plt.plot(np.linalg.norm((out-gt), axis=1))
             # plt.show()
-            plt.savefig('%s-PREDICTION.png' % saved_weights_fname)
+            plt.savefig('%s-KITTI%02d-PREDICTION.png' % (saved_weights_fname, KITTI_SEQ))
         return out, accuracy
 
 try:
@@ -241,11 +255,11 @@ try:
     dat = DataHandler('syde673-lmu_vo')
 except:
     print('%sInstall abr_analyze to save results to hdf4 database%s' % (red, endc))
-testnum = 13
+testnum = 23
 batch_size = 32
-epochs = 5
-memory_d = 100
-order = 128
+epochs = 1000
+memory_d = 500
+order = 256
 theta_scale = 2 # how many timesteps to keep in dynamical model
 show_plot = True
 save = True
@@ -266,14 +280,16 @@ feature_shape_post_conv = (46, 153, 2)
 theta=np.prod(feature_shape_post_conv)*theta_scale, #  this keeps one seq in theta
 notes = (
 '''
-- Fixed theta issue, was using KITTI_SHAPE which is input image shape for theta, but should use the shape
-of the conv/max pool layer output. So all prev tests had theta *= 4
+- replacing tanh and scale up with dense layer with relu activation
+- adding connection mem to mem and hid to mem
+- smaller batchsize gave same results, so leaving at 32 for speed
+- theta val issue fixced
 - Max pool instead of conv
 Testing with op flow normalization\n
 - epochs 1000
 - theta scale 2\n
-- memory dim 100
-- order 128
+- memory dim 500
+- order 256
 '''
 )
 # NOTE that changes to trainval or test seq need to be made in run() as well
@@ -377,16 +393,13 @@ for ss, seq in enumerate(seqs):
         if test_type == 'test':
             dat.save(
                 data={'predict': output},
-                save_location='%s/%s/KITTI%s' % (test_group, testnum, trained_seq_str),
+                save_location='%s/%s/KITTI%02d-trained_%s' % (test_group, testnum, KITTI_SEQ, trained_seq_str),
                     overwrite=True
             )
         elif test_type == 'trainval':
-            print('TYPE: ', type(output.history))
-            import time
-            time.sleep(3)
             dat.save(
                 data={'result': output.history},
-                save_location='%s/%s/KITTI%s' % (test_group, testnum, trained_seq_str),
+                save_location='%s/%s/KITTI%02d-trained_%s' % (test_group, testnum, KITTI_SEQ, trained_seq_str),
                     overwrite=True
             )
 
